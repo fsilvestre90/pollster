@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+
+<html lang="" xml:lang="" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8"/>
+<meta content="pandoc" name="generator"/>
+<meta content="width=device-width, initial-scale=1.0, user-scalable=yes" name="viewport"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script>
+  function encodePlantUML(text) {
+    var deflated = pako.deflate(text, { level: 9 });
+    var raw = deflated.slice(2, deflated.length - 4);
+    var encode6bit = function(data) {
+      var chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+      var result = "", current = 0, bitCount = 0;
+      for (var i = 0; i < data.length; i++) {
+        current = (current << 8) | data[i];
+        bitCount += 8;
+        while (bitCount >= 6) {
+          bitCount -= 6;
+          result += chars[(current >> bitCount) & 0x3F];
+        }
+      }
+      if (bitCount > 0) {
+        result += chars[(current << (6 - bitCount)) & 0x3F];
+      }
+      return result;
+    };
+    return encode6bit(raw);
+  }
+
+  function renderAllPlantUML() {
+    document.querySelectorAll("pre.plantuml").forEach((pre, idx) => {
+      const code = pre.textContent.trim();
+      if (!code.startsWith("@startuml")) return;
+      const encoded = encodePlantUML(code);
+      const img = document.createElement("img");
+      img.src = "https://www.plantuml.com/plantuml/svg/" + encoded;
+      img.alt = "PlantUML diagram";
+      img.style.maxWidth = "100%";
+      img.style.margin = "1.5em 0";
+      pre.replaceWith(img);
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", renderAllPlantUML);
+</script>
+<title>Pollster System Design</title>
+<style>
+html {
+color: #1a1a1a;
+background-color: #fdfdfd;
+}
+body {
+margin: 0 auto;
+max-width: 36em;
+padding-left: 50px;
+padding-right: 50px;
+padding-top: 50px;
+padding-bottom: 50px;
+hyphens: auto;
+overflow-wrap: break-word;
+text-rendering: optimizeLegibility;
+font-kerning: normal;
+}
+@media (max-width: 600px) {
+body {
+font-size: 0.9em;
+padding: 12px;
+}
+h1 {
+font-size: 1.8em;
+}
+}
+@media print {
+html {
+background-color: white;
+}
+body {
+background-color: transparent;
+color: black;
+font-size: 12pt;
+}
+p, h2, h3 {
+orphans: 3;
+widows: 3;
+}
+h2, h3, h4 {
+page-break-after: avoid;
+}
+}
+p {
+margin: 1em 0;
+}
+a {
+color: #1a1a1a;
+}
+a:visited {
+color: #1a1a1a;
+}
+img {
+max-width: 100%;
+}
+svg {
+height: auto;
+max-width: 100%;
+}
+h1, h2, h3, h4, h5, h6 {
+margin-top: 1.4em;
+}
+h5, h6 {
+font-size: 1em;
+font-style: italic;
+}
+h6 {
+font-weight: normal;
+}
+ol, ul {
+padding-left: 1.7em;
+margin-top: 1em;
+}
+li > ol, li > ul {
+margin-top: 0;
+}
+blockquote {
+margin: 1em 0 1em 1.7em;
+padding-left: 1em;
+border-left: 2px solid #e6e6e6;
+color: #606060;
+}
+code {
+font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+font-size: 85%;
+margin: 0;
+hyphens: manual;
+}
+pre {
+margin: 1em 0;
+overflow: auto;
+}
+pre code {
+padding: 0;
+overflow: visible;
+overflow-wrap: normal;
+}
+.sourceCode {
+background-color: transparent;
+overflow: visible;
+}
+hr {
+border: none;
+border-top: 1px solid #1a1a1a;
+height: 1px;
+margin: 1em 0;
+}
+table {
+margin: 1em 0;
+border-collapse: collapse;
+width: 100%;
+overflow-x: auto;
+display: block;
+font-variant-numeric: lining-nums tabular-nums;
+}
+table caption {
+margin-bottom: 0.75em;
+}
+tbody {
+margin-top: 0.5em;
+border-top: 1px solid #1a1a1a;
+border-bottom: 1px solid #1a1a1a;
+}
+th {
+border-top: 1px solid #1a1a1a;
+padding: 0.25em 0.5em 0.25em 0.5em;
+}
+td {
+padding: 0.125em 0.5em 0.25em 0.5em;
+}
+header {
+margin-bottom: 4em;
+text-align: center;
+}
+#TOC li {
+list-style: none;
+}
+#TOC ul {
+padding-left: 1.3em;
+}
+#TOC > ul {
+padding-left: 0;
+}
+#TOC a:not(:hover) {
+text-decoration: none;
+}
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Pollster System Design - Submission by Filipe Silvestre</h1>
+</header>
+<p>Below outlines a proposed design for the Pollster system. The goal is
+to build a scalable, real-time polling system that can smoothly handle
+millions of users, even when polls go viral.</p>
+<h3 id="assumptions">Assumptions</h3>
+<ol type="1">
+<li><p><strong>Frontend is out of scope</strong><br/>
+Assume a frontend (e.g. SPA or mobile app) exists and will integrate
+with the backend, but its implementation is not part of this
+design.</p></li>
+<li><p><strong>Authentication is handled</strong><br/>
+User sign-up, login, and authentication are already implemented and
+functional.</p></li>
+<li><p><strong>Security is out of scope</strong><br/>
+While security is important, detailed security considerations are
+outside the scope of this document.</p></li>
+</ol>
+<h2 id="overview-of-system-requirements">✅ Overview of System
+Requirements</h2>
+<ul>
+<li><p>Immutable polls with multiple-choice questions</p></li>
+<li><p>Real-time updates of aggregated poll results</p></li>
+<li><p>High scalability and durability</p></li>
+<li><p>Fault tolerance and extensibility</p></li>
+</ul>
+<h3 id="background-tasks">Background Tasks</h3>
+<ul>
+<li><p>Send milestone notifications</p></li>
+<li><p>Periodic archival</p></li>
+</ul>
+<hr/>
+<h2 id="data-estimates">Data Estimates</h2>
+<p>Here’s a quick, informal calculation to understand Pollster’s
+performance, scale, and infrastructure requirements.</p>
+<h3 id="assumptions-1">Assumptions</h3>
+<ul>
+<li><p><strong>Active polls at peak:</strong> 100 polls</p></li>
+<li><p><strong>Votes per second per poll:</strong> 10 votes/sec</p></li>
+<li><p><strong>Active concurrent viewers per poll:</strong> ~10,000
+users</p></li>
+</ul>
+<h3 id="analysis">Analysis</h3>
+<h4 id="vote-write-throughput">📊 Vote Write Throughput</h4>
+<ul>
+<li><code>100 polls × 10 votes/sec per poll = 1,000 votes/sec</code></li>
+</ul>
+<h4 id="data-ingestion-database-storage">📊 Data Ingestion (Database
+Storage)</h4>
+<ul>
+<li><p><strong>Per second:</strong>
+<code>1,000 votes/sec × 226 bytes (estimated key size) ≈ 226 KB/sec</code></p></li>
+<li><p><strong>Per day:</strong>
+<code>226 KB/sec × 86,400 sec/day ≈ 19.5 GB/day</code></p></li>
+</ul>
+<h4 id="redis-streams-hashes">📊 Redis Streams &amp; Hashes</h4>
+<ul>
+<li><p><strong>Redis Streams Throughput:</strong></p>
+<ul>
+<li>1,000 events/sec (votes) are easily handled by Redis (<a href="https://devopedia.org/redis-streams#qst-ans-7">&gt;10K
+ops/sec</a>)</li>
+</ul></li>
+<li><p><strong>Redis Hash Memory Usage:</strong></p>
+<ul>
+<li><p><code>46 bytes (estimated key size) + 8 bytes (integer value) ≈ 54 bytes per choice entry</code></p></li>
+<li><p><code>(100 polls × 5 choices/poll) × 54 bytes ≈ 27 KB total</code>
+(negligible)</p></li>
+</ul></li>
+</ul>
+<hr/>
+<h2 id="database-design-postgresql">🗄️Database Design (PostgreSQL)</h2>
+<p>PostgreSQL is a great initial choice for Pollster because:</p>
+<ul>
+<li><p>Widely adopted across many enterprises and startups</p></li>
+<li><p>Great documentation and active community</p></li>
+<li><p>Natural fit for modeling structured relationships (polls,
+questions, choices)</p></li>
+<li><p>Strong ACID guarantees for consistency and auditability</p></li>
+<li><p>Built-in scalability features (partitioning, indexing)</p></li>
+</ul>
+<h4 id="nosql-vs-relational">NOSQL vs Relational</h4>
+<p>I did not suggest NoSQL because the data is relational — polls have
+questions, questions have choices, and responses tie it all together.
+It’s easier and safer to manage that kind of structure in a relational
+database, and we get things like consistency, joins, and reliable
+queries out of the box with PostgreSQL.</p>
+<h3 id="table-schema">📌 Table Schema</h3>
+<pre class="plantuml"><code>@startuml
+!define primary_key(x) &lt;b&gt;x&lt;/b&gt;
+!define foreign_key(x) &lt;i&gt;x&lt;/i&gt;
+
+entity "polls" {
+    primary_key(poll_id): UUID
+    creator_id: UUID
+    title: TEXT
+    description: TEXT
+    created_at: TIMESTAMP
+    closed_at: TIMESTAMP
+    unique_slug: TEXT
+}
+
+entity "questions" {
+    primary_key(question_id): UUID
+    foreign_key(poll_id): UUID
+    question_text: TEXT
+    "order": INTEGER
+}
+
+entity "choices" {
+    primary_key(choice_id): UUID
+    foreign_key(question_id): UUID
+    choice_text: TEXT
+}
+
+entity "responses" {
+    primary_key(response_id): UUID
+    foreign_key(question_id): UUID
+    foreign_key(choice_id): UUID
+    user_id: UUID
+    submitted_at: TIMESTAMP
+    ip_address: TEXT
+}
+
+' Relationships
+polls ||--o{ questions : has
+questions ||--o{ choices : has
+questions ||--o{ responses : receives
+choices ||--o{ responses : selected_by
+polls ||--o{ responses : records
+@enduml
+</code></pre>
+<h3 id="polls-table">📌 Polls Table</h3>
+<pre class="plantuml"><code>@startuml
+
+entity "polls" as polls {
+    *poll_id: UUID &lt;&lt;PK&gt;&gt; -- Unique poll identifier
+    creator_id: UUID -- ID of poll creator
+    title: TEXT -- Title of the poll
+    description: TEXT -- Optional description
+    created_at: TIMESTAMP -- When the poll was created
+    closed_at: TIMESTAMP -- When the poll was closed (nullable)
+    unique_slug: TEXT -- URL-friendly unique identifier
+}
+@enduml
+</code></pre>
+<p>Holds high-level metadata about each poll. Polls are immutable after
+creation, except for their <code>closed_at</code> field. The field
+<code>unique_slug</code> will allow unique URL lookups to satisfy our
+requirements.</p>
+<h3 id="questions-table">📌 Questions Table</h3>
+<pre class="plantuml"><code>@startuml
+
+entity "questions" as questions {
+    *question_id: UUID &lt;&lt;PK&gt;&gt; -- Unique question ID
+    poll_id: UUID &lt;&lt;FK&gt;&gt; -- Refers to parent poll
+    question_text: TEXT -- Text of the question
+    order: INTEGER -- Display order (optional)
+}
+
+@enduml
+</code></pre>
+<p>Each poll can have multiple questions which allows flexibility for
+future multi-question polls.</p>
+<h3 id="choices-table">📌 Choices Table</h3>
+<pre class="plantuml"><code>@startuml
+
+entity "choices" as choices {
+    *choice_id: UUID &lt;&lt;PK&gt;&gt; -- Unique choice ID
+    question_id: UUID &lt;&lt;FK&gt;&gt; -- Associated question
+    choice_text: TEXT -- The actual choice label
+}
+
+@enduml
+</code></pre>
+<p>Holds the predefined answers for each question. Users can select from
+these during voting.</p>
+<h3 id="responses-table">📌 Responses Table</h3>
+<pre class="plantuml"><code>@startuml
+
+entity "responses" as responses {
+    *response_id: UUID &lt;&lt;PK&gt;&gt; -- Unique vote ID
+    question_id: UUID &lt;&lt;FK&gt;&gt; -- Question being answered
+    choice_id: UUID &lt;&lt;FK&gt;&gt; -- Selected choice
+    user_id: UUID -- Optional if anonymous
+    submitted_at: TIMESTAMP -- Time vote was submitted
+}
+
+@enduml
+</code></pre>
+<p>Stores every individual vote submitted by users. Acts as a durable
+audit trail for aggregation and analytics. Add constraints in the table
+to ensure a user has only voted on a question once.</p>
+<hr/>
+<h2 id="redis">⚡Redis</h2>
+<p>Reliable, asynchronous vote event processing:</p>
+<ul>
+<li><p>Sharded streams for horizontal scalability</p></li>
+<li><p>Ordered vote handling ensures accurate processing</p></li>
+<li><p>Redis Streams can handle thousands of events/sec</p></li>
+</ul>
+<p>Pollster should use Redis to handle the real-time side of voting.
+Streams let us queue incoming vote events for workers to process
+reliably, hashes track live vote counts so we can read them super fast,
+and pub/sub pushes updates out to WebSocket servers instantly. It keeps
+things fast and responsive, and it separates real-time concerns from our
+database, which helps with scale and resilience.</p>
+<h4 id="votes">🧵 Votes</h4>
+<p><strong>Key Format:</strong>
+<code>poll:votes:stream-{shard_id}</code></p>
+<p><strong>Example Event:</strong></p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb6-1"><a aria-hidden="true" href="#cb6-1" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb6-2"><a aria-hidden="true" href="#cb6-2" tabindex="-1"></a>  <span class="dt">"poll_id"</span><span class="fu">:</span> <span class="st">"abc123"</span><span class="fu">,</span></span>
+<span id="cb6-3"><a aria-hidden="true" href="#cb6-3" tabindex="-1"></a>  <span class="dt">"question_id"</span><span class="fu">:</span> <span class="st">"456"</span><span class="fu">,</span></span>
+<span id="cb6-4"><a aria-hidden="true" href="#cb6-4" tabindex="-1"></a>  <span class="dt">"choice_id"</span><span class="fu">:</span> <span class="st">"789"</span><span class="fu">,</span></span>
+<span id="cb6-5"><a aria-hidden="true" href="#cb6-5" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h4 id="milestone-calculation">🧵 Milestone Calculation</h4>
+<p><strong>Key Format:</strong>
+<code>milestone:stream-{shard_id}</code></p>
+<p><strong>Example Event:</strong></p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb7-1"><a aria-hidden="true" href="#cb7-1" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb7-2"><a aria-hidden="true" href="#cb7-2" tabindex="-1"></a>  <span class="dt">"poll_id"</span><span class="fu">:</span> <span class="st">"abc123"</span><span class="fu">,</span></span>
+<span id="cb7-3"><a aria-hidden="true" href="#cb7-3" tabindex="-1"></a>  <span class="dt">"total_votes"</span><span class="fu">:</span> <span class="dv">10000</span></span>
+<span id="cb7-4"><a aria-hidden="true" href="#cb7-4" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h4 id="notify">🧵 Notify</h4>
+<p><strong>Key Format:</strong>
+<code>notify:stream-{shard_id}</code></p>
+<p><strong>Example Event:</strong></p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb8-1"><a aria-hidden="true" href="#cb8-1" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb8-2"><a aria-hidden="true" href="#cb8-2" tabindex="-1"></a>  <span class="dt">"poll_id"</span><span class="fu">:</span> <span class="st">"abc123"</span><span class="fu">,</span></span>
+<span id="cb8-3"><a aria-hidden="true" href="#cb8-3" tabindex="-1"></a>  <span class="dt">"type"</span><span class="fu">:</span> <span class="st">"milestone"</span><span class="fu">,</span></span>
+<span id="cb8-4"><a aria-hidden="true" href="#cb8-4" tabindex="-1"></a>  <span class="dt">"recipient_id"</span><span class="fu">:</span> <span class="st">"user-456"</span><span class="fu">,</span></span>
+<span id="cb8-5"><a aria-hidden="true" href="#cb8-5" tabindex="-1"></a>  <span class="dt">"message"</span><span class="fu">:</span> <span class="st">"Your poll just hit 10,000 votes!"</span></span>
+<span id="cb8-6"><a aria-hidden="true" href="#cb8-6" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h4 id="archival">🧵 Archival</h4>
+<p><strong>Key Format:</strong>
+<code>archival:stream-{shard_id}</code></p>
+<p><strong>Example Event:</strong></p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb9-1"><a aria-hidden="true" href="#cb9-1" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb9-2"><a aria-hidden="true" href="#cb9-2" tabindex="-1"></a>  <span class="dt">"poll_id"</span><span class="fu">:</span> <span class="st">"abc123"</span><span class="fu">,</span></span>
+<span id="cb9-3"><a aria-hidden="true" href="#cb9-3" tabindex="-1"></a>  <span class="dt">"event"</span><span class="fu">:</span> <span class="st">"poll_closed"</span><span class="fu">,</span></span>
+<span id="cb9-4"><a aria-hidden="true" href="#cb9-4" tabindex="-1"></a>  <span class="dt">"closed_at"</span><span class="fu">:</span> <span class="st">"2025-03-27T20:00:00Z"</span></span>
+<span id="cb9-5"><a aria-hidden="true" href="#cb9-5" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h4 id="redis-hash-aggregates">🧮 Redis Hash (Aggregates)</h4>
+<ul>
+<li><p>Atomic counters for real-time vote totals</p></li>
+<li><p>Ultra-fast updates, even under heavy load</p></li>
+</ul>
+<p><a href="https://redis.io/docs/latest/develop/data-types/hashes/">Redis hashes are a good data structure for storing counts</a></p>
+<p><strong>Key Format:</strong> <code>poll:{poll_id}:counts</code></p>
+<p><strong>Example:</strong></p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb10-1"><a aria-hidden="true" href="#cb10-1" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb10-2"><a aria-hidden="true" href="#cb10-2" tabindex="-1"></a>  <span class="dt">"choice:789"</span><span class="fu">:</span> <span class="dv">1540</span><span class="fu">,</span></span>
+<span id="cb10-3"><a aria-hidden="true" href="#cb10-3" tabindex="-1"></a>  <span class="dt">"choice:790"</span><span class="fu">:</span> <span class="dv">1200</span><span class="fu">,</span></span>
+<span id="cb10-4"><a aria-hidden="true" href="#cb10-4" tabindex="-1"></a>  <span class="dt">"choice:791"</span><span class="fu">:</span> <span class="dv">230</span></span>
+<span id="cb10-5"><a aria-hidden="true" href="#cb10-5" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<h4 id="redis-pubsub-channel">📨 Redis Pub/Sub Channel</h4>
+<ul>
+<li><p>Efficiently notifies WebSocket nodes</p></li>
+<li><p>Enables real-time updates without DB polling</p></li>
+</ul>
+<p><strong>Channel Name:</strong>
+<code>poll:{poll_id}:updates</code></p>
+<p><strong>Example Message:</strong></p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb11-1"><a aria-hidden="true" href="#cb11-1" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb11-2"><a aria-hidden="true" href="#cb11-2" tabindex="-1"></a>  <span class="dt">"poll_id"</span><span class="fu">:</span> <span class="st">"123"</span><span class="fu">,</span></span>
+<span id="cb11-3"><a aria-hidden="true" href="#cb11-3" tabindex="-1"></a>  <span class="dt">"results"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb11-4"><a aria-hidden="true" href="#cb11-4" tabindex="-1"></a>    <span class="dt">"choice:789"</span><span class="fu">:</span> <span class="dv">1540</span><span class="fu">,</span></span>
+<span id="cb11-5"><a aria-hidden="true" href="#cb11-5" tabindex="-1"></a>    <span class="dt">"choice:790"</span><span class="fu">:</span> <span class="dv">1200</span><span class="fu">,</span></span>
+<span id="cb11-6"><a aria-hidden="true" href="#cb11-6" tabindex="-1"></a>    <span class="dt">"choice:791"</span><span class="fu">:</span> <span class="dv">230</span></span>
+<span id="cb11-7"><a aria-hidden="true" href="#cb11-7" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb11-8"><a aria-hidden="true" href="#cb11-8" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>Pub/Sub enables stateless communication for websockets which helps in
+horizontally scaling the service with increased demand.</p>
+<hr/>
+<h2 id="architecture-diagram">Architecture Diagram</h2>
+<h3 id="birds-eye-view">🐦 Bird’s-eye View</h3>
+<p>Pollster is built for high-scale, real-time polling. Users vote and
+view results in a web app. Votes stream through Redis, are processed by
+workers, stored in PostgreSQL, and broadcast in real time via
+WebSockets.</p>
+<pre class="plantuml"><code>@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Person(user, "User")
+
+Container(webapp, "Pollster Web App", "React", "Frontend for creating and voting on polls")
+Container(backend, "Backend API + WebSocket", "Python", "Handles poll logic, voting, and live updates")
+Container(data, "Data Layer", "Redis + PostgreSQL", "Stores poll data and real-time vote counts")
+Container(workers, "Worker Services", "Python", "Processes votes, closes polls, sends notifications")
+
+Rel(user, webapp, "Uses")
+Rel(webapp, backend, "Sends requests and receives updates")
+Rel(backend, data, "Reads/writes data")
+Rel(backend, workers, "Dispatches background tasks")
+Rel(workers, data, "Processes votes and poll results")
+
+@enduml
+</code></pre>
+<h3 id="detailed-view">🔍 Detailed View</h3>
+<p>Everything is stateless, message-driven, and horizontally scalable.
+Redis is split by concern, and worker pools make ingestion and
+background jobs resilient under load.</p>
+<pre class="plantuml"><code>@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+' Icon libraries
+!define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+
+!include DEVICONS/react.puml
+!include DEVICONS/python.puml
+!include DEVICONS/postgresql.puml
+!include DEVICONS/redis.puml
+!include FONTAWESOME/server.puml
+!include FONTAWESOME/cogs.puml
+!include FONTAWESOME/cloud.puml
+
+' People
+Person(user, "User", "Creates polls, votes, views results, deactivates polls")
+
+' Frontend
+Container(spa, "Pollster Web App", "React", "Client interface for creating polls, voting, deactivating polls, and viewing results", $sprite="react")
+
+' Load balancer and scalable app nodes
+Container_Boundary(appTier, "Web Application Tier (Scaled)") {
+  Container(lb, "Load Balancer", "Layer 4/7", "Routes HTTP and WebSocket traffic")
+  Container(api, "API Server", "Python + Django", "Stateless REST &amp; WebSocket backend. Scaled horizontally.", $sprite="python")
+  Container(ws, "WebSocket Gateway", "Python", "Delivers real-time updates to clients", $sprite="server")
+}
+
+' Redis cluster for real-time stream &amp; pubsub
+Container(redisStream, "Redis Streams", "Redis", "Sharded stream for ingesting and processing vote events", $sprite="redis")
+Container(redisHash, "Redis Aggregates", "Redis", "Hash structure for storing live aggregated vote counts", $sprite="redis")
+Container(redisPubSub, "Redis Pub/Sub", "Redis", "Broadcast channel for real-time poll updates", $sprite="redis")
+
+' Scalable aggregation and background task workers
+Container_Boundary(workerPool, "Worker Pool") {
+  Container(aggregator, "Aggregator Worker", "Python", "Processes vote streams, updates aggregates and DB", $sprite="cogs")
+  Container(background, "Background Worker", "Python", "Handles poll archival, closure, and milestone notifications", $sprite="cogs")
+}
+
+' Data storage
+ContainerDb(pg, "PostgreSQL", "PostgreSQL", "Stores polls, questions, choices, and vote records", $sprite="postgresql")
+Container(archive, "Object Storage", "Cloud Storage", "Long-term archive for closed polls and exports", $sprite="cloud")
+
+' Relationships
+Rel(user, spa, "Uses")
+Rel(spa, lb, "Sends requests and connects to WebSocket")
+Rel(lb, api, "Routes HTTP requests")
+Rel(lb, ws, "Routes WebSocket connections")
+
+Rel(api, redisStream, "Publishes vote events")
+Rel(api, redisHash, "Reads vote counts")
+Rel(api, redisPubSub, "Publishes real-time updates")
+Rel(api, ws, "Establishes WebSocket session")
+
+Rel(ws, redisPubSub, "Subscribes to updates")
+Rel(ws, spa, "Sends live updates")
+
+Rel(aggregator, redisStream, "Consumes vote events")
+Rel(aggregator, redisHash, "Updates vote counts")
+Rel(aggregator, pg, "Inserts vote records")
+Rel(aggregator, redisPubSub, "Publishes updates")
+
+Rel(background, pg, "Reads poll metadata and votes")
+Rel(background, archive, "Archives data")
+Rel(background, api, "Triggers notifications")
+
+@enduml
+</code></pre>
+<p><strong>Stateless frontend &amp; backend:</strong><br/>
+Both the API server and WebSocket gateway are stateless, which means we
+can scale them horizontally behind load balancers. Spin up more
+instances, and they just work — no sticky sessions or shared memory to
+worry about. When traffic spikes (say, a poll goes viral), a load
+balancer can route requests to any healthy instance.</p>
+<ul>
+<li><p><strong>Real-time updates via Pub/Sub:</strong></p>
+<p>WebSocket servers subscribe to Redis Pub/Sub channels. When a vote
+gets processed, an update is published and all the WebSocket servers get
+it — simple and efficient. No polling or DB hits from the client
+side.</p></li>
+<li><p><strong>Redis roles:</strong><br/>
+Redis is used in three different contexts. Each are logically separate
+and, from the infrastructure perspective we can scale or shard each
+independently as traffic grows:</p>
+<ul>
+<li><strong>Streams</strong> for ingesting raw vote events</li>
+<li><strong>Hashes</strong> for keeping live aggregated counts</li>
+<li><strong>Pub/Sub</strong> for broadcasting updates</li>
+</ul></li>
+<li><p><strong>Parallel worker processing:</strong><br/>
+Aggregator workers read from Redis Streams using consumer groups — so we
+can run multiple in parallel to handle vote spikes. Background workers
+(like for archival or milestone notifications) scale separately
+too.</p></li>
+</ul>
+<h3 id="session-diagrams">Session Diagrams</h3>
+<h4 id="reading-votes">📖 Reading Votes</h4>
+<p>Below is a proposed workflow for users reading real-time votes.</p>
+<pre class="plantuml"><code>@startuml
+autonumber
+
+actor Client as "Client App"
+
+box "Application Tier"
+  participant LB as "Load Balancer"
+  participant API as "API Server"
+end box
+
+box "Redis Infrastructure"
+  participant RedisCache as "Redis Aggregates"
+end box
+
+participant DB as "PostgreSQL"
+
+== Client reads poll ==
+Client -&gt; LB : Request poll and vote results
+LB -&gt; API : Forward request
+
+== Check vote counts ==
+API -&gt; RedisCache : Fetch aggregated vote counts
+alt Cache miss
+  API -&gt; DB : Query vote counts from DB
+  API -&gt; RedisCache : Cache vote counts
+end
+
+== Check poll metadata ==
+API -&gt; RedisCache : Fetch poll metadata
+alt Cache miss
+  API -&gt; DB : Query poll metadata from DB
+  API -&gt; RedisCache : Cache poll metadata
+end
+
+== Respond to client ==
+API -&gt; LB : Return response
+LB -&gt; Client : Return poll metadata and vote results
+
+@enduml
+</code></pre>
+<h4 id="submit-vote">🗳️ Submit Vote</h4>
+<p>Below is a proposed workflow for users to submit votes.</p>
+<pre class="plantuml"><code>@startuml
+autonumber
+
+actor ReactApp as "Client App"
+
+box "Application Tier"
+  participant LB as "Load Balancer"
+  participant API as "API Server"
+  participant WS as "WebSocket Gateway"
+end box
+
+box "Redis Infrastructure"
+  participant RedisStreams as "Redis Streams"
+  participant RedisCache as "Redis Aggregates"
+  participant RedisPubSub as "Redis Pub/Sub"
+end box
+
+box "Backend Workers"
+  participant Aggregator as "Aggregator Worker"
+  participant Milestone as "Milestone Worker"
+end box
+
+participant DB as "PostgreSQL"
+
+== Client submits a vote ==
+ReactApp -&gt; LB : Connect (HTTPS / WebSocket)
+LB -&gt; API : Forward vote request
+API -&gt; RedisStreams : Enqueue vote event
+WS -&gt; RedisPubSub : Subscribe to updates
+API -&gt; LB : Return success
+LB -&gt; ReactApp : Success response
+
+
+
+== Vote processing ==
+Aggregator -&gt; RedisStreams : Consume vote event
+Aggregator -&gt; DB : Store vote
+Aggregator -&gt; RedisCache : Update vote count
+
+    Aggregator -&gt; RedisPubSub : Publish live vote update
+    RedisPubSub -&gt; WS : Deliver vote update
+    WS -&gt; ReactApp : Push vote count update
+
+par Milestone check (Async Task)
+    Aggregator -&gt; RedisStreams : Enqueue milestone check
+    Milestone -&gt; RedisStreams : Consume milestone task
+    Milestone -&gt; RedisStreams : Enqueue notification task
+end
+
+@enduml
+</code></pre>
+<h2 id="future-thoughts">💡 Future Thoughts</h2>
+<p>One thing I’d recommend exploring is change data capture (CDC) from
+PostgreSQL to Redis. Right now, we’re writing to both systems — the
+database for durability, and Redis for real-time aggregation — which
+creates a dual write situation. That opens the door to inconsistencies
+if one write succeeds and the other fails. With CDC, we’d treat
+PostgreSQL as the single source of truth and stream inserts or updates
+directly into Redis. This removes the need for application-level dual
+writes and simplifies our logic. It also guarantees Redis stays
+consistent with what’s actually stored in the database, which is a big
+win for correctness — especially as we scale. Additionally, I did not
+account for partitioning the database, autoscaling, or consider
+replication. This would greatly improve our reliability on the
+PostgreSQL-side of things. Cloudflare could be a nice additional layer
+of security - <a href="https://www.cloudflare.com/application-services/products/ddos-for-web/">they
+are a trusted and reliable solution for ingress traffic</a> within the
+Pollster network.</p>
+<p>We could also expand our user tracking to support more personalized
+notifications — for example, sending nudges to users who haven’t voted
+in a while, or generating daily or weekly digests that highlight polls
+they’ve created or engaged with. These types of triggers would run as
+background jobs and push events into the same notification stream, so
+the notification system stays decoupled but flexible.</p>
+</body>
+</html>
